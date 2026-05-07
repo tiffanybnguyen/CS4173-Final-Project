@@ -62,7 +62,7 @@ def rotate_keys(aes, mac, cha, fresh_salt):
     return _split_keys(raw)
 
 
-# Cascade: AES-CBC ciphertext XORed with a ChaCha20 keystream under an
+# Cascade: AES-CBC ciphertext XORed with a AES-CTR keystream under an
 # independent key. Recovering plaintext requires breaking both ciphers.
 def encrypt_cascade(aes_key, mac_key, cha_key, plaintext):
     iv = secrets.token_bytes(IV_LEN)
@@ -80,11 +80,6 @@ def encrypt_cascade(aes_key, mac_key, cha_key, plaintext):
 
 
 def decrypt_cascade(aes_key, mac_key, cha_key, blob):
-    if len(blob) < IV_LEN + NONCE_LEN + MAC_LEN + 16:
-        raise ValueError("cascade blob too short")
-    body, tag = blob[:-MAC_LEN], blob[-MAC_LEN:]
-    if not hmac.compare_digest(tag, hmac.new(mac_key, body, hashlib.sha256).digest()):
-        raise ValueError("HMAC verification failed")
     iv = body[:IV_LEN]
     nonce = body[IV_LEN:IV_LEN + NONCE_LEN]
     mixed = body[IV_LEN + NONCE_LEN:]
