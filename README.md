@@ -1,27 +1,17 @@
-# CS4173 Final Project — Secure P2P Messenger
+# Secure P2P Messenger
 
-Tkinter chat between two peers. The first time you launch the app it
-generates a long-term **RSA-2048 keypair** for you (`my_priv.pem` and
-`my_pub.pem`). You send your `my_pub.pem` to your partner once, over a
-trusted channel. Every chat session does an ephemeral **X25519
-Diffie-Hellman** exchange and **signs the ephemeral public keys**
-(RSA-PKCS#1 v1.5 over a SHA-256 hash). The other side verifies against
-the partner's RSA public key it has on disk. A bad signature drops the
-connection — no human comparison step.
-
-Messages use a **cascade**: AES-256-CBC ciphertext XORed with a ChaCha20
-keystream under an independent key, authenticated with HMAC-SHA256.
-Fresh IV/nonce per message, sequence numbers prevent replay, HKDF
-rotates the keys every 100 messages or 5 minutes.
+This final project program is a secure chat between two peers with GUI utilizing methods learned in Computer Security (CS4173/5173).
 
 ## Setup
 
+First, set up the corresponding Python environment:
 ```
-conda activate cs4173
+conda create -n final_project python=3.12
+conda activate final_project
 pip install -r requirements.txt
 ```
 
-## Run
+## How to Run
 
 ```
 python chat.py
@@ -34,22 +24,19 @@ first run: generated my_priv.pem and my_pub.pem
   → send my_pub.pem to your partner before connecting
 ```
 
-Send your `my_pub.pem` to your partner (email, AirDrop, USB, whatever).
-They send theirs back to you. Save the file they sent — call it
-`peer_pub.pem` if you want to keep things tidy.
-
-After that, the startup dialog asks for:
+1. Send your `public_key.pem` to your partner.
+2. They send theirs back to you, and save that file.
+3. After that, the startup dialog asks for:
 - **Role** — Listen or Connect
-- **Host** — IP to bind (Listen) or dial (Connect)
+- **Host** — IP to Listen or Connect
 - **Port**
 - **Peer public key** — path to your partner's public key file
 
-Run on two machines, one Listen + one Connect, both pointing at the
-listener's host/port.
+Run on two machines, one server (listen) + one client (connect), both pointing at the listener's host and port.
 
 ## Files
 
-- `cipher.py` — primitives: HKDF, AES-CBC ⊕ ChaCha20 cascade, X25519 DH, RSA sign/verify, key serialization
+- `cipher.py` — HKDF, AES-CBC ⊕ AES-CTR cascade, X25519 DH, RSA sign/verify, key serialization
 - `peer.py` — TCP framing, signed DH handshake, session keys, send/receive loop, key rotation
-- `chatui.py` — Tkinter startup dialog and chat window
-- `chat.py` — entry point; auto-generates RSA keypair on first run
+- `chatui.py` — Tkinter startup chat window
+- `chat.py` — entry point; auto-generates RSA keypair
