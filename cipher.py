@@ -9,7 +9,16 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import (
     X25519PrivateKey,
     X25519PublicKey,
 )
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.asymmetric import rsa, padding as asym_padding
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+    PrivateFormat,
+    NoEncryption,
+    load_pem_private_key,
+    load_pem_public_key,
+)
+from cryptography.exceptions import InvalidSignature
 
 SALT_LEN  = 16
 IV_LEN    = 16
@@ -20,6 +29,9 @@ AES_KEY_LEN = 32
 MAC_KEY_LEN = 32
 CHA_KEY_LEN = 32
 TOTAL_KEY_LEN = AES_KEY_LEN + MAC_KEY_LEN + CHA_KEY_LEN
+
+RSA_BITS = 2048
+RSA_SIG_LEN = RSA_BITS // 8
 
 
 def _split_keys(raw):
@@ -96,12 +108,40 @@ def dh_shared(sk, peer_pub_bytes):
     return sk.exchange(X25519PublicKey.from_public_bytes(peer_pub_bytes))
 
 
-def short_auth_string(shared_secret):
-    digest = HKDF(
-        algorithm=hashes.SHA256(),
-        length=4,
-        salt=None,
-        info=b"sas-display",
-    ).derive(shared_secret)
-    n = int.from_bytes(digest, "big") % 1_000_000
-    return f"{n:06d}"
+def make_rsa_keypair():
+    priv = rsa.generate_private_key(public_exponent=65537, key_size=RSA_BITS)
+    return priv, priv.public_key()
+
+
+def rsa_sign(priv, data):
+    return priv.sign(data, asym_padding.PKCS1v15(), hashes.SHA256())
+
+
+def rsa_verify(pub, data, sig):
+    try:
+        pub.verify(sig, data, asym_padding.PKCS1v15(), hashes.SHA256())
+        return True
+    except InvalidSignature:
+        return False
+
+
+def save_rsa_priv(path, priv):
+    pem = priv.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+    with open(path, "wb") as f:
+        f.write(pem)
+
+
+def save_rsa_pub(path, pub):
+    pem = pub.public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+    with open(path, "wb") as f:
+        f.write(pem)
+
+
+def load_rsa_priv(path):
+    with open(path, "rb") as f:
+        return load_pem_private_key(f.read(), password=None)
+
+
+def load_rsa_pub(path):
+    with open(path, "rb") as f:
+        return load_pem_public_key(f.read())

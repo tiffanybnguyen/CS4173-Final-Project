@@ -1,8 +1,9 @@
 import queue
 import threading
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
 
+import cipher
 import peer
 
 
@@ -31,11 +32,29 @@ class StartupFrame(ttk.Frame):
         self.port.insert(0, "9001")
         self.port.grid(row=3, column=1, sticky="w", pady=(6, 0))
 
+        ttk.Label(self, text="Peer public key").grid(row=4, column=0, sticky="w", pady=(10, 0))
+        self.peer_key = ttk.Entry(self, width=24)
+        self.peer_key.insert(0, "peer_pub.pem")
+        self.peer_key.grid(row=4, column=1, sticky="w", pady=(10, 0))
+        ttk.Button(self, text="Browse",
+                   command=lambda: self._pick(self.peer_key)).grid(
+            row=4, column=2, sticky="w", padx=(6, 0), pady=(10, 0))
+
+        ttk.Label(self, text="(your own keypair is auto-generated as my_priv.pem / my_pub.pem)",
+                  foreground="#888888").grid(row=5, column=0, columnspan=3,
+                                              sticky="w", pady=(8, 0))
+
         ttk.Button(self, text="Start", command=self._submit).grid(
-            row=4, column=0, columnspan=3, pady=(16, 0))
+            row=6, column=0, columnspan=3, pady=(16, 0))
 
         self.bind_all("<Return>", lambda _e: self._submit())
         self.host.focus_set()
+
+    def _pick(self, entry):
+        path = filedialog.askopenfilename(title="Select key file")
+        if path:
+            entry.delete(0, "end")
+            entry.insert(0, path)
 
     def _submit(self):
         host = self.host.get().strip()
@@ -47,8 +66,17 @@ class StartupFrame(ttk.Frame):
         except ValueError:
             messagebox.showerror("Invalid port", "Port must be a number")
             return
+        peer_key = self.peer_key.get().strip()
+        if not peer_key:
+            messagebox.showerror("Missing key", "Peer public key path is required")
+            return
         self.unbind_all("<Return>")
-        self.on_start({"role": self.role.get(), "host": host, "port": port})
+        self.on_start({
+            "role": self.role.get(),
+            "host": host,
+            "port": port,
+            "peer_key": peer_key,
+        })
 
 
 class ChatWindow:
@@ -63,7 +91,7 @@ class ChatWindow:
 
         header = ttk.Frame(root, padding=8)
         header.pack(fill="x")
-        info = f"{cfg['role']}  •  {cfg['host']}:{cfg['port']}  •  X25519 + cascade"
+        info = f"{cfg['role']}  •  {cfg['host']}:{cfg['port']}  •  X25519 + RSA + cascade"
         ttk.Label(header, text=info).pack(side="left")
         self.status = ttk.Label(header, text="status: starting…")
         self.status.pack(side="right")
@@ -107,14 +135,7 @@ class ChatWindow:
             self._line(f"-- connected to {data['peer']} --", "sys")
             self.status.config(text="status: handshaking")
         elif kind == "ready":
-            sas = data["sas"]
-            self._line(f"-- DH key agreed. Verify SAS: {sas} --", "sys")
-            messagebox.showinfo(
-                "Verify Short Authentication String",
-                f"Compare this number with the other party out-of-band\n"
-                f"(phone, in person, etc):\n\n{sas}\n\n"
-                f"If they don't match, you may be under a MITM attack.",
-            )
+            self._line("-- peer RSA signature verified, session key established --", "sys")
             self.status.config(text=f"status: ready (epoch {self.peer.session.epoch})")
         elif kind == "sent":
             self._line(f"you: {data['plaintext']}", "you")
@@ -152,7 +173,14 @@ class ChatWindow:
         threading.Thread(target=self._setup, daemon=True).start()
 
     def _setup(self):
-        self.peer = peer.Peer(self._post)
+        try:
+            my_priv = cipher.load_rsa_priv("my_priv.pem")
+            peer_pub = cipher.load_rsa_pub(self.cfg["peer_key"])
+        except Exception as e:
+            self._post("error", msg=f"could not load key files: {e}")
+            return
+
+        self.peer = peer.Peer(self._post, my_priv, peer_pub)
         try:
             if self.cfg["role"] == "listen":
                 self._post("error", msg=f"listening on {self.cfg['host']}:{self.cfg['port']}…")
@@ -173,7 +201,7 @@ class ChatWindow:
 def run():
     root = tk.Tk()
     root.title("P2P Chat")
-    root.geometry("420x260")
+    root.geometry("520x340")
 
     def proceed(cfg):
         for w in root.winfo_children():

@@ -74,10 +74,15 @@ class Session:
                 or time.time() - self.epoch_started >= ROTATE_EVERY_SECS)
 
 
+EPHEMERAL_PUB_LEN = 32
+
+
 class Peer:
-    def __init__(self, on_event):
+    def __init__(self, on_event, my_rsa_priv, peer_rsa_pub):
         self.on_event = on_event
         self.session = Session()
+        self.my_rsa_priv = my_rsa_priv
+        self.peer_rsa_pub = peer_rsa_pub
         self.sock = None
         self.alive = False
         self.is_initiator = False
@@ -102,20 +107,30 @@ class Peer:
 
     def handshake(self):
         sk, pub = cipher.make_dh_keypair()
+        sig = cipher.rsa_sign(self.my_rsa_priv, pub)
+        my_msg = bytes([T_HELLO_DH]) + pub + sig
+
         if self.is_initiator:
-            _send_frame(self.sock, bytes([T_HELLO_DH]) + pub)
+            _send_frame(self.sock, my_msg)
             f = _recv_frame(self.sock)
         else:
             f = _recv_frame(self.sock)
-            _send_frame(self.sock, bytes([T_HELLO_DH]) + pub)
+            _send_frame(self.sock, my_msg)
+
         if not f or f[0] != T_HELLO_DH:
             raise RuntimeError("expected HELLO_DH")
-        peer_pub = f[1:]
+        if len(f) != 1 + EPHEMERAL_PUB_LEN + cipher.RSA_SIG_LEN:
+            raise RuntimeError(f"bad HELLO_DH length {len(f)}")
+        peer_pub = f[1:1 + EPHEMERAL_PUB_LEN]
+        peer_sig = f[1 + EPHEMERAL_PUB_LEN:]
+
+        if not cipher.rsa_verify(self.peer_rsa_pub, peer_pub, peer_sig):
+            raise RuntimeError("peer RSA signature did not verify — possible MITM")
+
         shared = cipher.dh_shared(sk, peer_pub)
         aes, mac, cha = cipher.derive_dh_keys(shared)
         self.session.install(aes, mac, cha)
-        sas = cipher.short_auth_string(shared)
-        self.on_event("ready", sas=sas)
+        self.on_event("ready")
 
     def start(self):
         self.alive = True
