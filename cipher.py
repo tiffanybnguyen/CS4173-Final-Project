@@ -71,7 +71,7 @@ def encrypt_cascade(aes_key, mac_key, cha_key, plaintext):
     padded = p.update(plaintext) + p.finalize()
     enc = Cipher(algorithms.AES(aes_key), modes.CBC(iv)).encryptor()
     aes_ct = enc.update(padded) + enc.finalize()
-    keystream = (Cipher(algorithms.ChaCha20(cha_key, nonce), mode=None)
+    keystream = (Cipher(algorithms.AES(cha_key), modes.CTR(nonce))
                  .encryptor()
                  .update(b"\x00" * len(aes_ct)))
     mixed = bytes(a ^ b for a, b in zip(aes_ct, keystream))
@@ -88,7 +88,7 @@ def decrypt_cascade(aes_key, mac_key, cha_key, blob):
     iv = body[:IV_LEN]
     nonce = body[IV_LEN:IV_LEN + NONCE_LEN]
     mixed = body[IV_LEN + NONCE_LEN:]
-    keystream = (Cipher(algorithms.ChaCha20(cha_key, nonce), mode=None)
+    keystream = (Cipher(algorithms.AES(cha_key), modes.CTR(nonce))
                  .decryptor()
                  .update(b"\x00" * len(mixed)))
     aes_ct = bytes(a ^ b for a, b in zip(mixed, keystream))
