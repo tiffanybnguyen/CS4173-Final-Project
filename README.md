@@ -20,8 +20,8 @@ python chat.py
 The first run on a given machine prints something like:
 
 ```
-first run: generated my_priv.pem and my_pub.pem
-  → send my_pub.pem to your partner before connecting
+first run: generated private_key.pem and public_key.pem
+  → send public_key.pem to your partner before connecting
 ```
 
 1. Send your `public_key.pem` to your partner.
