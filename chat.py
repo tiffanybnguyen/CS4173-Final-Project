@@ -3,8 +3,8 @@ import os
 import cipher
 from chatui import run
 
-MY_PRIV = "my_priv.pem"
-MY_PUB = "my_pub.pem"
+MY_PRIV = "private_key.pem"
+MY_PUB = "public_key.pem"
 
 
 def ensure_keys():

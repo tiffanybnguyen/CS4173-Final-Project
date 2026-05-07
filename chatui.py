@@ -40,7 +40,7 @@ class StartupFrame(ttk.Frame):
                    command=lambda: self._pick(self.peer_key)).grid(
             row=4, column=2, sticky="w", padx=(6, 0), pady=(10, 0))
 
-        ttk.Label(self, text="(your own keypair is auto-generated as my_priv.pem / my_pub.pem)",
+        ttk.Label(self, text="(your own keypair is auto-generated as private_key.pem / public_key.pem)",
                   foreground="#888888").grid(row=5, column=0, columnspan=3,
                                               sticky="w", pady=(8, 0))
 
@@ -174,13 +174,13 @@ class ChatWindow:
 
     def _setup(self):
         try:
-            my_priv = cipher.load_rsa_priv("my_priv.pem")
+            private_key = cipher.load_rsa_priv("private_key.pem")
             peer_pub = cipher.load_rsa_pub(self.cfg["peer_key"])
         except Exception as e:
             self._post("error", msg=f"could not load key files: {e}")
             return
 
-        self.peer = peer.Peer(self._post, my_priv, peer_pub)
+        self.peer = peer.Peer(self._post, private_key, peer_pub)
         try:
             if self.cfg["role"] == "listen":
                 self._post("error", msg=f"listening on {self.cfg['host']}:{self.cfg['port']}…")
